@@ -1,0 +1,267 @@
+// Based upon code from Chuck Faranda, modified for use with 12v reversible motors; the original code was written for garage door opener motors.
+// Chuck Faranda's Project Page: https://projecthub.arduino.cc/cfar/rolling-roof-computer-interface-rrci-a7f9ac
+// Required:
+// RRCI ASCOM Driver: https://ccdastro.com/RRCI.zip
+// Arduino 4 Relays Shield: https://docs.arduino.cc/tutorials/4-relays-shield/4-relay-shield-basics
+// Roller Limit Switches or similar: https://www.amazon.com/gp/product/B07CM6Y3J8/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1
+// Right Angle Gear Motor 12V or similar: https://www.amazon.com/BEMONOC-Torque-Reversible-Gear-Box-Threaded/dp/B01GJ4VPH2?ref_=ast_sto_dp
+// 330 Ohm 1/2w Resistors were used for LEDs and buttons
+// Arduino Uno
+// 2-Pin Buttons Tutorial https://chewett.co.uk/blog/1755/gikfun-normal-open-2-pin-push-button-switch-for-arduino-review-and-code/
+// Reversing Motor with two relays: https://forum.arduino.cc/t/tips-for-switching-for-motor-forward-and-reverse/327932/7
+
+String serialin; //incoming serial data
+String str; //store the state  of opened/closed/safe pins
+
+// 0 (RX)
+// 1 (TX)
+// 2 RRCI opened
+// 3 RRCI stop
+// 4 RRCI relay_2 Motor Close the Roof
+// 5 RRCI sensor
+// 6 EECI safe
+// 7 RRCI relay_1 Motor Open the Roof
+// 8 (unused) relay_3
+// 9 RRCI Roof Closed Sensor
+// 10 RRCI Telescope Safe LED
+// 11 (unused)
+// 12 (unused) relay_4
+// 13 RRCI Telescope Safe Sensor
+// 14 (A0) Open button
+// 15 (A1) Close button
+// 16 (A2) Stop button
+// 17 (A3) RRCI Roof Closed LED
+// 18 (A4) RRCI Roof Opened LED
+// 19 (A5) RRCI Roof Moving LED
+
+//input sensors
+#define opened 2  // roof open sensor
+#define stop 3
+#define sensor 5
+#define closed 9  // roof closed sensor
+#define safe 13   // scope safety sensor
+
+int relay_1 = 7; //relay_1 is OPEN THE ROOF
+int relay_2 = 4; //relay_2 is CLOSE THE ROOF
+const int buttonPinOpen = 14; //Open Button A0
+const int buttonPinClose = 15; //Close Button A1
+const int buttonPinStop = 16; //Stop Button A2
+int buttonStateOpen = 0;
+int buttonStateStop = 0;
+int buttonStateClose = 0;
+int yellow = 19; // Roof Moving LED in A5
+int blue = 17; // Roof Closed LED in A3
+int red = 18; // Roof Opened LED in A4
+int period = 1000; //millis wait instead of delay
+unsigned long time_now = 0; //millis wait instead of delay
+int led = 10; // the pin the scope safe LED is connected to
+unsigned  long end_time;
+bool lost = false; //roof not reporting state
+
+void setup()  {
+  end_time=millis()+60000; //roof lost reset timer ~60 seconds  change to suit  your rquirments to determine if roof is lost
+  Serial.begin(9600); //Begin Serial Comunication(configured  for 9600baud)
+
+  //pins as OUTPUT
+  pinMode(stop, OUTPUT);
+  pinMode(sensor, OUTPUT);
+  pinMode(relay_1, OUTPUT); //relay_1 is OPEN
+  pinMode(relay_2, OUTPUT); //relay_2 is CLOSE
+  pinMode(yellow,OUTPUT);
+  pinMode(blue,OUTPUT);
+  pinMode(red,OUTPUT);
+  
+  //pins as INPUT
+  pinMode(closed, INPUT_PULLUP);
+  pinMode(opened,  INPUT_PULLUP); 
+  pinMode(safe, INPUT_PULLUP);
+  pinMode(buttonPinOpen, INPUT);
+  pinMode(buttonPinStop, INPUT);
+  pinMode(buttonPinClose, INPUT);
+   
+  //Relay state
+  digitalWrite(stop,LOW);
+  digitalWrite(sensor,HIGH);
+  digitalWrite(relay_1,LOW); 
+  digitalWrite(relay_2,LOW); 
+  Serial.write("RRCI#"); //init string
+}
+
+void loop() {
+  Timer();
+  if (digitalRead(safe) == LOW){
+     digitalWrite(led, HIGH); // Turn the Safe LED on
+   }
+  else if (digitalRead(safe)  == HIGH){ 
+    digitalWrite(led, LOW); // Turn the Safe LED off
+  }
+
+  buttonStateOpen = digitalRead(buttonPinOpen); //Read button status
+  buttonStateStop = digitalRead(buttonPinStop); //Read button status
+  buttonStateClose = digitalRead(buttonPinClose); //Read button status
+
+if (buttonStateOpen == HIGH && (digitalRead(safe) == LOW)) {
+    digitalWrite(relay_1,HIGH);
+    digitalWrite(yellow,HIGH); // Roof moving LED on
+    Serial.println("Opening" );
+    digitalWrite(sensor,LOW);
+  } else {
+    //Serial.println("ELSE Opening" ); //debug, ELSE should do nothing
+  }
+
+if (buttonStateStop == HIGH) {
+     digitalWrite(relay_1,LOW);
+     digitalWrite(relay_2,LOW);
+     Serial.println("Stopping" );
+     digitalWrite(sensor,LOW);
+  } else {
+    //Serial.println("ELSE Stopping" ); //debug, ELSE should do nothing
+  }
+
+if (buttonStateClose == HIGH && (digitalRead(safe) == LOW)) {
+    digitalWrite(relay_2,HIGH);
+    digitalWrite(yellow,HIGH); // Roof moving LED on
+    Serial.println("Closing" );
+    digitalWrite(sensor,LOW);
+  } else {
+    //Serial.println("ELSE Closing" ); //debug, ELSE should do nothing
+  }
+
+  //Verify connection by serial
+  while (Serial.available()>0) {
+    serialin = Serial.readStringUntil('#');    //Read  Serial data and alocate on serialin
+  
+     if (serialin == "on"){ // turn scope sensor on
+      digitalWrite(sensor,HIGH);
+      Serial.println("On");
+      }
+      
+      else  if (serialin == "open"){ 
+        if (digitalRead(sensor) == LOW){//turn on  IR scope sensor
+           digitalWrite(sensor,HIGH);
+        }
+
+        if (digitalRead(safe) == LOW){//open only if scope safe/HIGH
+           digitalWrite(relay_1,HIGH);
+           Serial.println("Opening" );
+          digitalWrite(sensor,LOW);
+        }
+      }
+      if (serialin == "y"){ 
+           digitalWrite(relay_2,LOW);
+      }
+     if (serialin == "off"){ // turn scope sensor off
+      digitalWrite(sensor,LOW);
+      Serial.println("Off");
+      } 
+  
+    if (serialin ==  "x"){ 
+      digitalWrite(relay_1,LOW);
+     }
+   
+    else if (serialin == "close"){ 
+        if  (digitalRead(sensor) == LOW){//turn on Safe scope sensor
+           digitalWrite(sensor,HIGH);
+        }
+        
+        if (digitalRead(safe)  == LOW){//close only if scope safe
+           digitalWrite(relay_2,HIGH);
+           Serial.println("Closing" );
+           digitalWrite(sensor,LOW);
+        }
+      }
+  }  
+
+  if (digitalRead(closed) == LOW) { //stop relays when 'closed' reached
+      if  (digitalRead(relay_2) == HIGH){ //relays low if it was high
+           digitalWrite(relay_2,LOW);	  
+      }
+     
+  }
+if (digitalRead(opened) == LOW) {  //stop relays when  'opened' reached
+       
+      if (digitalRead(relay_1) == HIGH){ //relays low  if it was high
+	  digitalWrite(relay_1,LOW);
+      }
+  }
+if (serialin  == "Parkstatus"){ // exteranl query command to fetch RRCI data
+  
+  Serial.println("0#");
+   serialin = ""; 
+  }
+ 
+if (serialin == "get"){ // external query  command to fetch RRCI data - Two Pipelines(||) to make a boolean OR Comparission
+  
+  if (digitalRead(opened) == LOW){
+     str += "opened,";
+     digitalWrite(red, HIGH); // Opened LED
+     digitalWrite(blue, LOW); // Closed LED 
+     digitalWrite(yellow, LOW); // Moving LED
+  }
+  else if (digitalRead(closed) == LOW){
+     str += "closed,";
+     digitalWrite(red, LOW); // Opened LED
+     digitalWrite(blue, HIGH); // Closed LED 
+     digitalWrite(yellow, LOW); // Moving LED
+  }
+  
+  if ((digitalRead(closed) == HIGH) && (digitalRead(opened) == HIGH)){
+       str += "unknown,";
+  }
+  
+  if (digitalRead(safe) == LOW){ 
+     str += "safe,";
+     
+  }
+  else if (digitalRead(safe) == HIGH){ 
+    str += "unsafe,";
+    
+  }
+  
+   if ((digitalRead(closed) == HIGH)  && (digitalRead(opened) == LOW) && (lost == false)){
+     str += "not_moving_o#";
+     end_time=millis()+60000; //reset the timer
+   }
+   
+  if ((digitalRead(closed)  == LOW) && (digitalRead(opened) == HIGH) && (lost == false)){
+     str += "not_moving_c#";
+     end_time=millis()+60000; //reset the timer
+   }
+  if ((digitalRead(closed)  == HIGH) && (digitalRead(opened) == HIGH) && (lost == false)){
+       str +=  "moving#";
+     digitalWrite(red, LOW); // Opened LED
+     digitalWrite(blue, LOW); // Closed LED 
+     digitalWrite(yellow, HIGH); // Moving LED
+  }     
+  else if ((digitalRead(closed) == HIGH)  && (digitalRead(opened) == HIGH) && (lost == true)){   
+      str += "unknown#";
+  }
+  if (str.endsWith(","))  {
+    str += "unknown#";
+  }
+ 
+  Serial.println(str);  //send serial data
+ serialin = "";  
+ str = "";
+
+}
+  if (serialin == "Status"){
+  Serial.println("RoofOpen#");
+  
+ }
+serialin  = "";  
+//str = "";
+  } 
+   
+void Timer(){ // detect roof lost
+  if(millis()>=end_time){
+     //60 s have passed!!
+      if ((digitalRead(closed)  == HIGH) && (digitalRead(opened)) == HIGH){
+       lost = true; //where the heck  is the roof position?
+     }
+  } 
+    if ((digitalRead(closed)  == LOW) or (digitalRead(opened)) == LOW){
+             lost = false; //roof state  is known
+             end_time=millis()+60000; //reset the timer  
+  }
+}
