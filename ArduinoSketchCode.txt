@@ -1,5 +1,6 @@
 // Based upon code from Chuck Faranda, modified for use with 12v reversible motors; the original code was written for garage door opener motors.
 // Chuck Faranda's Project Page: https://projecthub.arduino.cc/cfar/rolling-roof-computer-interface-rrci-a7f9ac
+// Project Video: https://youtu.be/Z6WKA7ne13A
 // Required:
 // RRCI ASCOM Driver: https://ccdastro.com/RRCI.zip
 // Arduino 4 Relays Shield: https://docs.arduino.cc/tutorials/4-relays-shield/4-relay-shield-basics
